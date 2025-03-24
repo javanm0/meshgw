@@ -1,0 +1,28 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment variables
+.env
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Logs
+*.log
+
+# OS-specific files
+.DS_Store
+
+# Byte-compiled files
+*.pyc
+
+# IDE-specific files
+.vscode/
+.idea/
+
+# Docker-related files
+*.pid
