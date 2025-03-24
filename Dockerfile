@@ -44,4 +44,4 @@ COPY . .
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Run the application when the container launches
-CMD ["python", "meshgw-receiver.py"]
+CMD ["python", "meshgw.py"]
