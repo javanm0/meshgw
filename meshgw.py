@@ -27,8 +27,15 @@ ws_hub_server = os.getenv('WS_HUB_SERVER')
 
 def connect_websocket():
     """Attempt to connect to the WebSocket server with retries."""
+    global sio
     while True:
         try:
+            # If the client is not disconnected, reset it
+            if sio.connected or sio.eio.state != 'disconnected':
+                logger.warning("Resetting WebSocket client...")
+                sio.disconnect()
+                sio = socketio.Client()  # Reinitialize the client
+
             sio.connect(ws_hub_server)
             logger.info("WebSocket connected with session ID: %s", sio.sid)
             break  # Exit the loop if connection is successful
