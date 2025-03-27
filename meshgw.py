@@ -25,9 +25,16 @@ logger = logging.getLogger(__name__)
 sio = socketio.Client()
 ws_hub_server = os.getenv('WS_HUB_SERVER')
 
-logging.info("Connecting to WebSocket server: %s", ws_hub_server)
-sio.connect(ws_hub_server)
-logger.info("WebSocket connected with session ID: %s", sio.sid)
+def connect_websocket():
+    """Attempt to connect to the WebSocket server with retries."""
+    while True:
+        try:
+            sio.connect(ws_hub_server)
+            logger.info("WebSocket connected with session ID: %s", sio.sid)
+            break  # Exit the loop if connection is successful
+        except socketio.exceptions.ConnectionError as e:
+            logger.error("WebSocket connection failed: %s. Retrying in 5 seconds...", e)
+            time.sleep(5)  # Wait before retrying
 
 # Meshtastic event handlers
 def onReceive(packet, interface):
@@ -106,7 +113,16 @@ try:
     hostname = meshtastic_hostname
     iface = meshtastic.tcp_interface.TCPInterface(hostname=hostname)
     
+    # Ensure WebSocket is connected before starting the main loop
+    connect_websocket()
+
     while True:
+        # Check WebSocket connection and reconnect if necessary
+        if not sio.connected:
+            logger.warning("WebSocket disconnected. Attempting to reconnect...")
+            connect_websocket()
+
+        # Check Meshtastic device connection
         if not ping_ip(hostname):
             logger.info("Ping failed, retrying...")
             while not ping_ip(hostname):
