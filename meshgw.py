@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 sio = socketio.Client()
 ws_hub_server = os.getenv('WS_HUB_SERVER')
 
+@sio.on('disconnect')
+def on_disconnect():
+    """Log when the WebSocket disconnects."""
+    logger.warning("WebSocket disconnected.")
+
 def connect_websocket():
     """Attempt to connect to the WebSocket server with retries."""
     global sio
@@ -35,6 +40,7 @@ def connect_websocket():
                 logger.warning("Resetting WebSocket client...")
                 sio.disconnect()
                 sio = socketio.Client()  # Reinitialize the client
+                sio.on('disconnect', on_disconnect)  # Re-register the disconnect handler
 
             sio.connect(ws_hub_server)
             logger.info("WebSocket connected with session ID: %s", sio.sid)
@@ -42,6 +48,18 @@ def connect_websocket():
         except socketio.exceptions.ConnectionError as e:
             logger.error("WebSocket connection failed: %s. Retrying in 5 seconds...", e)
             time.sleep(5)  # Wait before retrying
+
+def connect_meshtastic(hostname):
+    """Reconnect to the Meshtastic device."""
+    while True:
+        try:
+            logger.info("Attempting to connect to Meshtastic device at %s", hostname)
+            iface = meshtastic.tcp_interface.TCPInterface(hostname=hostname)
+            logger.info("Successfully connected to Meshtastic device.")
+            return iface
+        except Exception as e:
+            logger.error("Failed to connect to Meshtastic device: %s. Retrying in 5 seconds...", e)
+            time.sleep(5)
 
 # Meshtastic event handlers
 def onReceive(packet, interface):
@@ -118,8 +136,8 @@ try:
     meshtastic_hostname = os.getenv('MESHTASTIC_HOSTNAME')
     logging.info("Connecting to Meshtastic device at %s", meshtastic_hostname)
     hostname = meshtastic_hostname
-    iface = meshtastic.tcp_interface.TCPInterface(hostname=hostname)
-    
+    iface = connect_meshtastic(hostname)  # Use the new function to connect to Meshtastic
+
     # Ensure WebSocket is connected before starting the main loop
     connect_websocket()
 
@@ -136,13 +154,21 @@ try:
                 time.sleep(0.1)  # Wait 100ms before retrying
             logger.info("Ping succeeded, restarting connection...")
             iface.close()
-            iface = meshtastic.tcp_interface.TCPInterface(hostname=hostname)
-        
-        # Poll the API and send messages every 10 seconds
-        poll_and_send_messages(iface)
+            iface = connect_meshtastic(hostname)  # Reconnect to Meshtastic device
+
+        try:
+            # Poll the API and send messages every 10 seconds
+            poll_and_send_messages(iface)
+        except BrokenPipeError as e:
+            logger.error("Broken pipe error: %s. Restarting Meshtastic connection...", e)
+            iface.close()
+            iface = connect_meshtastic(hostname)  # Reconnect to Meshtastic device
+        except Exception as e:
+            logger.error("Unexpected error: %s", e)
+
         time.sleep(1)
     iface.close()
 
 except Exception as ex:
-    logger.error(f"Connection error: {ex}")
+    logger.error(f"Fatal error: {ex}")
     sys.exit(1)
