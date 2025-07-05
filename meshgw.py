@@ -17,6 +17,9 @@ from meshtastic.util import (
     get_unique_vendor_ids,
 )
 
+NODE_ID = os.getenv('NODE_ID')
+api_url = os.getenv('API_URL')
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -71,14 +74,15 @@ def onReceive(packet, interface):
         node_id = packet['from']
         message_data = packet['decoded']['text']
         
-        current_time = time.time()
-        message_id = hashlib.sha256(f"{message_data}{current_time}".encode()).hexdigest()
+        if node_id == NODE_ID:
+            current_time = time.time()
+            message_id = hashlib.sha256(f"{message_data}{current_time}".encode()).hexdigest()
 
-        messageDataJSON = {message_id: {"node_id": node_id, "message": message_data}}
-        logger.info(f"Received message from {node_id}: {message_data}")
+            messageDataJSON = {message_id: {"node_id": node_id, "message": message_data}}
+            logger.info(f"Received message from {node_id}: {message_data}")
 
-        # Emit the message to the WebSocket server
-        sio.emit('message', messageDataJSON)
+            # Emit the message to the WebSocket server
+            sio.emit('message', messageDataJSON)
 
 # Connection and disconnection handlers
 def onConnection(interface, topic=pub.AUTO_TOPIC):
@@ -113,23 +117,24 @@ def poll_and_send_messages(iface):
                     text = message["message"]
                     message_id = message["_id"]  # Use the _id field for updating
                     
-                    logger.info("Sending message to node_id %s: %s", node_id, text)
-                    
-                    try:
-                        iface.sendText(text, destinationId=int(node_id))  # Ensure node_id is an integer
+                    if node_id == NODE_ID:
+                        logger.info("Sending message to node_id %s: %s", node_id, text)
                         
-                        # Update message status via API
-                        put_url = "http://hub.meshrelay.com:443/api/sms"
-                        put_data = {"id": message_id}
-                        put_headers = {"Content-Type": "application/json"}
-                        put_response = requests.put(put_url, json=put_data, headers=put_headers)
-                        
-                        if put_response.status_code == 200:
-                            logger.info("Successfully updated message status for _id %s", message_id)
-                        else:
-                            logger.error("Failed to update message status for _id %s. Status code: %s", message_id, put_response.status_code)
-                    except Exception as e:
-                        logger.error("Failed to send message to node_id %s: %s", node_id, e)
+                        try:
+                            iface.sendText(text, destinationId=int(node_id))  # Ensure node_id is an integer
+                            
+                            # Update message status via API
+                            put_url = api_url
+                            put_data = {"id": message_id}
+                            put_headers = {"Content-Type": "application/json"}
+                            put_response = requests.put(put_url, json=put_data, headers=put_headers)
+                            
+                            if put_response.status_code == 200:
+                                logger.info("Successfully updated message status for _id %s", message_id)
+                            else:
+                                logger.error("Failed to update message status for _id %s. Status code: %s", message_id, put_response.status_code)
+                        except Exception as e:
+                            logger.error("Failed to send message to node_id %s: %s", node_id, e)
         else:
             logger.error("Failed to fetch messages from API. Status code: %s", response.status_code)
     except Exception as e:

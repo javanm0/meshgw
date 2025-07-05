@@ -10,6 +10,7 @@ docker pull meshrelay0/meshrelay-meshgw:latest
 sudo docker run -d --network network_name --name meshgw \
 -e WS_HUB_SERVER=socket_hub_server \
 -e MESHTASTIC_HOSTNAME=meshtastic_hostname \
+-e NODE_ID=node_id \
 -e API_URL=api_hub_server \
 -p 8080:8080 meshrelay0/meshrelay-meshgw:latest
 ```
